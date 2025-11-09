@@ -1,0 +1,24 @@
+# Market symbols configuration
+indices:
+  - SPX
+#  - VIX
+
+# cryptocurrencies:
+#   - ETH/USD
+#   - BTC/USD
+
+#equities:
+  - CRWV
+#  - AMD
+
+# futures:
+#   - /MCLG6
+#   - /MCLF6
+
+# future_options:
+#   - ./MCLM5MW2K5 251017C62.5
+#   - ./MCLM5MW2K5 251017P65.75
+
+# options:
+#   - SPLG  251017C00048000
+#   - SPLG  251017P00054000
