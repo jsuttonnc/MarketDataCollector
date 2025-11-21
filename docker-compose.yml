@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  market-data-collector:
+    build: .
+    container_name: market-data-collector
+    restart: unless-stopped
+    environment:
+      - PYTHONUNBUFFERED=1
+    env_file:
+      - .env  # Make sure you have your environment variables
+    volumes:
+      - ./logs:/app/logs  # Optional: if you want to persist logs
+    networks:
+      - market-data-network
+
+networks:
+  market-data-network:
+    driver: bridge

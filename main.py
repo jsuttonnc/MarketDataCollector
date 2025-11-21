@@ -1,4 +1,4 @@
-import json
+# import json
 import os
 import yaml
 import asyncio
@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from src.data.market_data_store import MarketDataStore
 from src.subscription.market_data_subscription import MarketDataSubscription
-from src.messages.push_notifications import send_pushover_notification
+# from src.messages.push_notifications import send_pushover_notification
 from src.session.session_manager import create_session
 
 
