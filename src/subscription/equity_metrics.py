@@ -14,6 +14,7 @@ class EquityMetrics:
         self.session = session
         self.data_store = data_store
 
+
     @staticmethod
     def _combine_data(metrics_data, market_data):
         """
@@ -61,7 +62,6 @@ class EquityMetrics:
         Args:
             symbols_list: List of symbols to fetch data for (e.g., ["AMD", "MU"])
         """
-
         # validate the session
         validate_session(self.session)
 
@@ -74,34 +74,7 @@ class EquityMetrics:
 
         # Print the combined data for each symbol
         for symbol, data in combined_data.items():
-            print(f"=== {symbol} ===")
-
-            # Critical Metrics (Must-Have)
-            print(f"  IV Rank: {data['metrics'].get('implied_volatility_index_rank')}")
-            print(f"  IV Index: {data['metrics'].get('implied_volatility_index')}")
-            print(f"  IV Percentile: {data['metrics'].get('implied_volatility_percentile')}")
-            print(f"  Liquidity Rating: {data['metrics'].get('liquidity_rating')}")
-            print(f"  Liquidity Value: {data['metrics'].get('liquidity_value')}")
-            print(f"  IV 30-Day: {data['metrics'].get('implied_volatility_30_day')}")
-            print(f"  HV 30-Day: {data['metrics'].get('historical_volatility_30_day')}")
-            print(f"  IV-HV Difference: {data['metrics'].get('iv_hv_30_day_difference')}")
-
-            # Very Important Metrics
-            print(f"  Bid: {data['market_data'].get('bid')}")
-            print(f"  Ask: {data['market_data'].get('ask')}")
-            print(f"  Last Price: {data['market_data'].get('last')}")
-            print(f"  Close Price: {data['market_data'].get('close')}")
-            print(f"  Beta: {data['metrics'].get('beta')}")
-
-            # Important Context Metrics
-            print(f"  HV 60-Day: {data['metrics'].get('historical_volatility_60_day')}")
-            print(f"  HV 90-Day: {data['metrics'].get('historical_volatility_90_day')}")
-            print(f"  Volume: {data['market_data'].get('volume')}")
-            print(f"  Earnings Expected Date: {data['metrics'].get('earnings', {}).get('expected_report_date')}")
-            print(f"  Earnings Time of Day: {data['metrics'].get('earnings', {}).get('time_of_day')}")
-
-            print("-" * 40)
-
+            # print(f"=== {symbol} ===")
             # Inside the loop where you're processing each symbol
             metrics_dict = {
                 'symbol': symbol,

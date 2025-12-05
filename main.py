@@ -11,21 +11,18 @@ from src.subscription.market_data_subscription import MarketDataSubscription
 # from src.messages.push_notifications import send_pushover_notification
 from src.session.session_manager import create_session
 from src.subscription.equity_metrics import EquityMetrics
-from tastytrade.market_data import get_market_data_by_type
-from tastytrade.order import InstrumentType
-from tastytrade.metrics import get_market_metrics
 
-def load_symbols():
-    """Load symbols from the symbols.yaml file."""
-    symbols_file = os.path.join(os.path.dirname(__file__), 'symbols.yaml')
+def load_symbols(source_file):
+    """Load symbols from the source_file file."""
+    symbols_file = os.path.join(os.path.dirname(__file__), source_file)
     try:
-        with open('symbols.yaml', 'r') as f:
+        with open(source_file, 'r') as f:
             symbols_data = yaml.safe_load(f)
             return symbols_data
     except FileNotFoundError:
-        raise FileNotFoundError(f"Symbols file not found: {symbols_file}")
+        raise FileNotFoundError(f"Symbols file not found: {source_file}")
     except yaml.YAMLError as e:
-        raise ValueError(f"Invalid YAML in symbols file: {symbols_file}. Error: {e}")
+        raise ValueError(f"Invalid YAML in symbols file: {source_file}. Error: {e}")
 
 
 @asynccontextmanager
@@ -59,31 +56,14 @@ async def market_subscription_manager(session, symbols, data_store):
                 print(f"Error disconnecting database: {e}")
 
 
-async def daily_task():
-    """Task that runs once daily"""
-    print(f"Running daily task at {datetime.now()}")
-    try:
-        # Add your specific daily task logic here
-        # For example:
-        # - Database cleanup
-        # - Generate daily reports
-        # - Send notifications
-        # - Process accumulated data
-
-        # Example task
-        data_store = MarketDataStore()
-        # await data_store.cleanup_old_data()
-        print("Daily maintenance task completed successfully")
-
-    except Exception as e:
-        print(f"Error in daily task: {e}")
-
-
 async def main():
     try:
-        # load symbols
-        symbols = load_symbols()
-        print(f"Loaded symbols: {symbols}")
+        # load streaming symbols
+        streaming_symbols = load_symbols('streaming-symbols.yaml')
+
+        # load nightly symbols
+        nightly_symbols = load_symbols('nightly-symbols.yaml')
+
     except Exception as e:
         print(f"Error loading symbols: {e}")
         return
@@ -99,10 +79,22 @@ async def main():
         print(f"Error creating session: {e}")
         return
 
-    # Get both market metrics (IV data) and market data (price info)
-    eqMetrics = EquityMetrics(session, data_store)
-    combined_data = eqMetrics.gather_metrics(["AMD"])
-    return
+    # Create a closure that captures the variables you need
+    async def daily_task():
+        """Task that runs once daily with access to session, data_store, and symbols"""
+        print(f"Running daily task at {datetime.now()}")
+        try:
+            # Now you have access to session, data_store, and symbols
+            # Example usage:
+            eq_metrics = EquityMetrics(session, data_store)
+            eq_metrics.gather_metrics(nightly_symbols['equities'])
+
+            # Add your other daily task logic here
+            print("Daily maintenance task completed successfully")
+
+        except Exception as ex:
+            print(f"Error in daily task: {ex}")
+
 
     try:
         # Initialize scheduler
@@ -111,7 +103,7 @@ async def main():
         # Schedule the task using cron syntax
         scheduler.add_job(
             daily_task,
-            CronTrigger(hour=3, minute=0, second=0),  # Run at 3:00:00 AM daily
+            CronTrigger(hour=15, minute=20, second=0),  # Run at 3:00:00 AM daily
             id='daily_task',
             name='Daily Maintenance Task',
             max_instances=1  # Prevent overlapping executions
@@ -122,7 +114,7 @@ async def main():
 
     try:
         # create a subscription
-        indices_list = symbols['indices']
+        indices_list = streaming_symbols['indices']
         async with market_subscription_manager(session, indices_list, data_store) as market_sub:
             print("Streamer is running. Press Ctrl+C to stop.")
 
