@@ -118,7 +118,7 @@ async def main():
         # Schedule the task using cron syntax
         scheduler.add_job(
             daily_task,
-            CronTrigger(hour=12, minute=13, second=0),  # Run at 12:11:00 PM daily
+            CronTrigger(hour=17, minute=24, second=0),  # Run at 3 AM daily
             id='daily_task',
             name='Daily Maintenance Task',
             max_instances=1  # Prevent overlapping executions
