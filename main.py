@@ -1,16 +1,20 @@
-import os
-import yaml
+
 import asyncio
-from datetime import datetime
+import os
 from contextlib import asynccontextmanager
+from datetime import datetime
+
+import yaml
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from dotenv import load_dotenv
+
 from src.data.market_data_store import MarketDataStore
-from src.subscription.market_data_subscription import MarketDataSubscription
 # from src.messages.push_notifications import send_pushover_notification
 from src.session.session_manager import create_session
 from src.subscription.equity_metrics import EquityMetrics
+from src.subscription.market_data_subscription import MarketDataSubscription
+
 
 def load_symbols(source_file):
     """Load symbols from the source_file file."""
@@ -38,14 +42,18 @@ async def market_subscription_manager(session, symbols, data_store):
         yield market_sub
 
     finally:
-        # Cleanup
+        # Cleanup - Fixed to prevent recursive cancellation
         print("Cleaning up resources...")
         if market_sub:
             try:
-                if asyncio.iscoroutinefunction(market_sub.stop):
-                    await market_sub.stop()
-                else:
-                    await market_sub.stop()
+                # Ensure we don't create recursive task cancellation
+                if hasattr(market_sub, 'stop'):
+                    if asyncio.iscoroutinefunction(market_sub.stop):
+                        await asyncio.wait_for(market_sub.stop(), timeout=5.0)
+                    else:
+                        market_sub.stop()
+            except asyncio.TimeoutError:
+                print("Warning: Market subscription stop timed out")
             except Exception as e:
                 print(f"Error stopping streamer: {e}")
 
@@ -57,6 +65,10 @@ async def market_subscription_manager(session, symbols, data_store):
 
 
 async def main():
+    # Create a shutdown event
+    shutdown_event = asyncio.Event()
+    scheduler = None
+
     try:
         # load streaming symbols
         streaming_symbols = load_symbols('streaming-symbols.yaml')
@@ -99,7 +111,6 @@ async def main():
         except Exception as ex:
             print(f"Error in daily task: {ex}")
 
-
     try:
         # Initialize scheduler
         scheduler = AsyncIOScheduler()
@@ -107,16 +118,12 @@ async def main():
         # Schedule the task using cron syntax
         scheduler.add_job(
             daily_task,
-            CronTrigger(hour=11, minute=42, second=0),  # Run at 3:00:00 AM daily
+            CronTrigger(hour=12, minute=13, second=0),  # Run at 12:11:00 PM daily
             id='daily_task',
             name='Daily Maintenance Task',
             max_instances=1  # Prevent overlapping executions
         )
-    except Exception as e:
-        print(f"Error initializing or configuring scheduler: {e}")
-        return
 
-    try:
         # create a subscription
         indices_list = streaming_symbols['indices']
         async with market_subscription_manager(session, indices_list, data_store) as market_sub:
@@ -126,17 +133,25 @@ async def main():
             scheduler.start()
             print("Daily task scheduled successfully")
 
+            # Wait for the shutdown signal (Ctrl+C will naturally raise KeyboardInterrupt)
             try:
-                # Keep the main process running
-                while True:
-                    await asyncio.sleep(60)  # Check every minute instead of every second
+                await shutdown_event.wait()
             except KeyboardInterrupt:
-                print("\nShutdown requested. Stopping scheduler...")
-                scheduler.shutdown(wait=True)
+                print("\nKeyboard interrupt received in wait loop")
                 raise
 
     except KeyboardInterrupt:
         print("\nShutdown requested. Exiting Script...")
+    except Exception as e:
+        print(f"Error in main execution: {e}")
+    finally:
+        # Proper cleanup of scheduler
+        if scheduler and scheduler.running:
+            print("Shutting down scheduler...")
+            try:
+                scheduler.shutdown(wait=False)  # Don't wait to prevent deadlock
+            except Exception as e:
+                print(f"Error shutting down scheduler: {e}")
 
 
 if __name__ == "__main__":
@@ -146,4 +161,8 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("Application interrupted")
+        print("\nApplication interrupted gracefully")
+    except Exception as e:
+        print(f"Application error: {e}")
+    finally:
+        print("Application shutdown complete")
