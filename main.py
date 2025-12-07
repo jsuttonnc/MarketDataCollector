@@ -84,10 +84,14 @@ async def main():
         """Task that runs once daily with access to session, data_store, and symbols"""
         print(f"Running daily task at {datetime.now()}")
         try:
-            # Now you have access to session, data_store, and symbols
-            # Example usage:
+            # Custom throttling (25 symbols per batch, 0.5s between calls, 2s between batches)
             eq_metrics = EquityMetrics(session, data_store)
-            eq_metrics.gather_metrics(nightly_symbols['equities'])
+            eq_metrics.gather_metrics(
+                nightly_symbols['equities'],
+                symbols_per_batch=25,
+                delay_between_calls=0.5,
+                delay_between_batches=2.0
+            )
 
             # Add your other daily task logic here
             print("Daily maintenance task completed successfully")
@@ -103,7 +107,7 @@ async def main():
         # Schedule the task using cron syntax
         scheduler.add_job(
             daily_task,
-            CronTrigger(hour=15, minute=20, second=0),  # Run at 3:00:00 AM daily
+            CronTrigger(hour=11, minute=42, second=0),  # Run at 3:00:00 AM daily
             id='daily_task',
             name='Daily Maintenance Task',
             max_instances=1  # Prevent overlapping executions
