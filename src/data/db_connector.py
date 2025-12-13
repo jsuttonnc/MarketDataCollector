@@ -2,8 +2,7 @@ import os
 import platform
 import psycopg2
 from typing import Any
-from psycopg2.extras import DictCursor
-from dotenv import load_dotenv
+from psycopg2.extras import DictCursor, execute_values
 
 
 class DatabaseConnector:
@@ -24,6 +23,7 @@ class DatabaseConnector:
         self.connection = None
         self.cursor = None
 
+
     def connect(self) -> None:
         """Establish connection to the PostgreSQL database"""
         try:
@@ -33,6 +33,7 @@ class DatabaseConnector:
         except psycopg2.Error as e:
             print(f"Error connecting to the database: {e}")
             raise
+
 
     def disconnect(self) -> None:
         """Close the database connection"""
@@ -45,6 +46,7 @@ class DatabaseConnector:
         except psycopg2.Error as e:
             print(f"Error disconnecting from the database: {e}")
             raise
+
 
     def execute_query(self, query: str, params: tuple = None) -> Any:
         """
@@ -68,10 +70,29 @@ class DatabaseConnector:
             print(f"Error executing query: {e}")
             raise
 
+    def execute_many(self, query: str, params_list: list[tuple], page_size: int = 1000) -> None:
+        """
+        Bulk execute for INSERT statements using psycopg2.extras.execute_values.
+
+        Expects `query` to be an INSERT with a single VALUES %s placeholder, e.g.:
+            INSERT INTO table (a,b,c) VALUES %s
+        """
+        if not params_list:
+            return
+
+        try:
+            execute_values(self.cursor, query, params_list, page_size=page_size)
+            self.connection.commit()
+        except psycopg2.Error:
+            self.connection.rollback()
+            raise
+
+
     def __enter__(self):
         """Context manager entry point"""
         self.connect()
         return self
+
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit point"""

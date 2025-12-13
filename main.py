@@ -1,7 +1,7 @@
 import asyncio
 import os
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import yaml
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -71,10 +71,8 @@ async def main():
     try:
         # load streaming symbols
         streaming_symbols = load_symbols('streaming-symbols.yaml')
-
         # load nightly symbols
         nightly_symbols = load_symbols('nightly-symbols.yaml')
-
     except Exception as e:
         print(f"Error loading symbols: {e}")
         return
@@ -82,10 +80,8 @@ async def main():
     try:
         # create session
         session = create_session()
-
         # create the data store
         data_store = MarketDataStore()
-
     except Exception as e:
         print(f"Error creating session: {e}")
         return
@@ -152,13 +148,42 @@ async def main():
             except Exception as e:
                 print(f"Error shutting down scheduler: {e}")
 
+async def collect_history():
+    try:
+        # load nightly symbols
+        nightly_symbols = load_symbols('nightly-symbols.yaml')
+    except Exception as e:
+        print(f"Error loading symbols: {e}")
+        return
+
+    try:
+        # create session
+        session = create_session()
+        # create the data store
+        data_store = MarketDataStore()
+    except Exception as e:
+        print(f"Error creating session: {e}")
+        return
+
+    # Set your symbol, interval, and time range
+    interval = "1d"
+    start = datetime.now() - timedelta(days=352)
+    end = datetime.now()
+
+    # Create a MarketDataSubscription instance
+    market_sub = MarketDataSubscription(session, nightly_symbols, data_store)
+    print(f"Downloading historical data from {start.date()} to {end.date()}...")
+    # for symbol in nightly_symbols:
+    await market_sub.download_historical_data(session, nightly_symbols, interval, start, end)
+
 
 if __name__ == "__main__":
     load_dotenv()
     # send_pushover_notification("The TastyData container has started successfully!")
 
     try:
-        asyncio.run(main())
+        # asyncio.run(main())
+        asyncio.run(collect_history())
     except KeyboardInterrupt:
         print("\nApplication interrupted gracefully")
     except Exception as e:

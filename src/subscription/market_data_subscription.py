@@ -5,6 +5,7 @@ from tastytrade import OAuthSession
 from tastytrade import DXLinkStreamer
 from tastytrade.dxfeed import Candle
 from tastytrade.metrics import get_market_metrics
+from datetime import datetime
 
 
 class MarketDataSubscription:
@@ -25,6 +26,7 @@ class MarketDataSubscription:
         self.streamer = None
         self.is_running = False
         self.listen_task = None
+
 
     async def connect(self):
         """Establish connection to Tastytrade and create a subscription."""
@@ -66,6 +68,7 @@ class MarketDataSubscription:
             await self.cleanup()
             raise
 
+
     async def _listen_for_data(self):
         """Internal method to listen for streaming data"""
         try:
@@ -82,6 +85,7 @@ class MarketDataSubscription:
             print("Data listening task was cancelled")
         except Exception as e:
             print(f"Error in data listening loop: {e}")
+
 
     async def stop(self):
         """Stop the subscription and clean up resources gracefully."""
@@ -114,6 +118,7 @@ class MarketDataSubscription:
 
         except Exception as e:
             print(f"Error during stop: {e}")
+
 
     async def cleanup(self):
         """Clean up streamer and session resources"""
@@ -190,3 +195,56 @@ class MarketDataSubscription:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async context manager exit"""
         await self.stop()
+
+
+    async def download_historical_data(self, session,
+                                       symbols: list[str],  # Changed to list
+                                       interval: str,
+                                       start: datetime,
+                                       end: datetime = datetime.now()) -> dict[str, list[dict]]:
+        data = {symbol: [] for symbol in symbols}  # Track data per symbol
+        end_ms = int(end.timestamp() * 1000)
+        start_ms = int(start.timestamp() * 1000)
+        completed_symbols = set()  # Track which symbols are done
+
+        async with DXLinkStreamer(session) as streamer:
+            await streamer.subscribe_candle(symbols,
+                                            interval,
+                                            start_time=start,
+                                            extended_trading_hours=False)
+            async for candle in streamer.listen(Candle):
+                symbol = candle.event_symbol.split('{')[0]
+
+                # Skip if this symbol is already complete
+                # if symbol in completed_symbols:
+                #     continue
+
+                # If candle is before our range, mark symbol as complete
+                if candle.time < start_ms:
+                    completed_symbols.add(symbol)
+                    # Exit if all symbols are complete
+                    if len(completed_symbols) == len(symbols):
+                        break
+                    continue
+
+                # Skip candles after our end time
+                # if candle.time > end_ms:
+                #     continue
+
+                # Store candles in range
+                if candle.close == 0:
+                    completed_symbols.add(symbol)
+                    if len(completed_symbols) == len(symbols):
+                        break
+                else:
+                    data[symbol].append(candle.model_dump())
+
+                # If we hit the exact start time, mark symbol as complete
+                # if candle.time == start_ms:
+                #     completed_symbols.add(symbol)
+                #     if len(completed_symbols) == len(symbols):
+                #         break
+
+        for symbol in symbols:
+            self.data_store.store_metric_data_history(symbol, data[symbol])
+            print(f"{symbol}: {len(data[symbol])} candles")

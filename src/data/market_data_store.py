@@ -1,3 +1,4 @@
+from datetime import timezone, datetime
 from typing import Dict, List, Any
 from src.data.db_connector import DatabaseConnector
 
@@ -109,6 +110,37 @@ class MarketDataStore:
             print(f"Successfully stored metrics data for symbol: {metrics_data.get('symbol')}")
         except Exception as e:
             print(f"Error inserting metrics data for {metrics_data.get('symbol')}: {e}")
+
+
+    def store_metric_data_history(self, symbol, data: list) -> None:
+        """
+        Store historical equity metrics and market data.
+
+        Args:
+            :param symbol:
+            :param data:
+        """
+        insert_sql = """
+                     INSERT INTO equity_data (symbol, close_price, volume, created_at)
+                     VALUES %s
+                     """
+
+        params_list = []
+        for item in data:
+            params_list.append(
+                (
+                    symbol,
+                    None if item.get('close') is None else float(item.get('close')),
+                    None if item.get('volume') is None else int(item.get('volume')),
+                    datetime.fromtimestamp(item.get('time') / 1000, tz=timezone.utc),
+                )
+            )
+
+        try:
+            self.db.execute_many(insert_sql, params_list=params_list, page_size=1000)
+            print(f"Successfully stored {len(params_list)} historical rows for symbol: {symbol}")
+        except Exception as e:
+            print(f"Error inserting historical metrics data for {symbol}: {e}")
 
 
     def get_stored_data(self, symbol: str = None) -> Dict[str, List[Dict[str, Any]]]:
