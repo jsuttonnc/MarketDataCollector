@@ -1,3 +1,5 @@
+from typing import Any, Coroutine
+
 from dotenv import load_dotenv
 from os import getenv
 import asyncio
@@ -5,6 +7,7 @@ from tastytrade import OAuthSession
 from tastytrade import DXLinkStreamer
 from tastytrade.dxfeed import Candle
 from tastytrade.metrics import get_market_metrics
+from datetime import datetime
 
 
 class MarketDataSubscription:
@@ -25,6 +28,7 @@ class MarketDataSubscription:
         self.streamer = None
         self.is_running = False
         self.listen_task = None
+
 
     async def connect(self):
         """Establish connection to Tastytrade and create a subscription."""
@@ -66,6 +70,7 @@ class MarketDataSubscription:
             await self.cleanup()
             raise
 
+
     async def _listen_for_data(self):
         """Internal method to listen for streaming data"""
         try:
@@ -82,6 +87,7 @@ class MarketDataSubscription:
             print("Data listening task was cancelled")
         except Exception as e:
             print(f"Error in data listening loop: {e}")
+
 
     async def stop(self):
         """Stop the subscription and clean up resources gracefully."""
@@ -114,6 +120,7 @@ class MarketDataSubscription:
 
         except Exception as e:
             print(f"Error during stop: {e}")
+
 
     async def cleanup(self):
         """Clean up streamer and session resources"""
@@ -190,3 +197,60 @@ class MarketDataSubscription:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async context manager exit"""
         await self.stop()
+
+
+    async def download_historical_data(
+        self,
+        session,
+        symbols: list[str],
+        interval: str,
+        start: datetime,
+        end: datetime = datetime.now(),
+    ) -> None:
+        data = {symbol: [] for symbol in symbols}
+        end_ms = int(end.timestamp() * 1000)
+        start_ms = int(start.timestamp() * 1000)
+        completed_symbols = set()
+
+        try:
+            async with DXLinkStreamer(session) as streamer:
+                self.streamer = streamer
+                self.session = session
+
+                await streamer.subscribe_candle(
+                    symbols,
+                    interval,
+                    start_time=start,
+                    extended_trading_hours=False
+                )
+
+                candle_iter = streamer.listen(Candle).__aiter__()
+
+                while True:
+                    try:
+                        candle = await asyncio.wait_for(anext(candle_iter), timeout=3.0)
+                    except asyncio.TimeoutError:
+                        print("No candles received in 3 seconds; breaking out.")
+                        break
+
+                    symbol = candle.event_symbol.split('{')[0]
+
+                    if candle.time < start_ms:
+                        completed_symbols.add(symbol)
+                        if len(completed_symbols) == len(symbols):
+                            break
+                        continue
+
+                    if candle.close == 0:
+                        completed_symbols.add(symbol)
+                        if len(completed_symbols) == len(symbols):
+                            break
+                    else:
+                        data[symbol].append(candle.model_dump())
+
+        finally:
+            await self.cleanup()
+
+        for symbol in symbols:
+            self.data_store.store_metric_data_history(symbol, data[symbol])
+            print(f"{symbol}: {len(data[symbol])} candles")
