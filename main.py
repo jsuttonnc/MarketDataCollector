@@ -9,7 +9,7 @@ from apscheduler.triggers.cron import CronTrigger
 from dotenv import load_dotenv
 
 from src.data.market_data_store import MarketDataStore
-# from src.messages.push_notifications import send_pushover_notification
+from src.messages.push_notifications import send_pushover_notification
 from src.session.session_manager import create_session
 from src.subscription.equity_metrics import EquityMetrics
 from src.subscription.market_data_subscription import MarketDataSubscription
@@ -63,6 +63,16 @@ async def market_subscription_manager(session, symbols, data_store):
                 print(f"Error disconnecting database: {e}")
 
 
+def _get_int_env(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if raw is None or raw == "":
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        raise ValueError(f"Invalid integer for {name}: {raw!r}")
+
+
 async def main():
     # Create a shutdown event
     shutdown_event = asyncio.Event()
@@ -90,6 +100,7 @@ async def main():
     async def daily_task():
         """Task that runs once daily with access to session, data_store, and symbols"""
         print(f"Running daily task at {datetime.now()}")
+        send_pushover_notification(f"Running daily task at {datetime.now()}")
         try:
             # Custom throttling (25 symbols per batch, 0.5s between calls, 2s between batches)
             eq_metrics = EquityMetrics(session, data_store)
@@ -102,18 +113,25 @@ async def main():
 
             # Add your other daily task logic here
             print("Daily maintenance task completed successfully")
+            send_pushover_notification("Daily maintenance task completed successfully")
 
         except Exception as ex:
+            send_pushover_notification(f"Error in daily task: {ex}")
             print(f"Error in daily task: {ex}")
 
     try:
         # Initialize scheduler
         scheduler = AsyncIOScheduler()
 
+        # get the start time from env
+        cron_hour = _get_int_env("DAILY_TASK_HOUR", 19)
+        cron_minute = _get_int_env("DAILY_TASK_MINUTE", 0)
+        cron_second = _get_int_env("DAILY_TASK_SECOND", 0)
+
         # Schedule the task using cron syntax
         scheduler.add_job(
             daily_task,
-            CronTrigger(hour=17, minute=24, second=0),  # Run at 3 AM daily
+            CronTrigger(hour=cron_hour, minute=cron_minute, second=cron_second),
             id='daily_task',
             name='Daily Maintenance Task',
             max_instances=1  # Prevent overlapping executions
@@ -170,20 +188,32 @@ async def collect_history():
     start = datetime.now() - timedelta(days=352)
     end = datetime.now()
 
-    # Create a MarketDataSubscription instance
     market_sub = MarketDataSubscription(session, nightly_symbols, data_store)
     print(f"Downloading historical data from {start.date()} to {end.date()}...")
-    # for symbol in nightly_symbols:
-    await market_sub.download_historical_data(session, nightly_symbols, interval, start, end)
+
+    symbols = nightly_symbols["equities"]
+    batch_size = 25
+    delay_between_batches = 2.0  # optional
+
+    for i in range(0, len(symbols), batch_size):
+        batch = symbols[i : i + batch_size]
+        print(f"Downloading batch {i // batch_size + 1} ({len(batch)} symbols)...")
+        await market_sub.download_historical_data(session, batch, interval, start, end)
+
+        if i + batch_size < len(symbols):
+            await asyncio.sleep(delay_between_batches)
 
 
 if __name__ == "__main__":
     load_dotenv()
-    # send_pushover_notification("The TastyData container has started successfully!")
+    send_pushover_notification("The TastyData container has started successfully!")
 
     try:
-        # asyncio.run(main())
-        asyncio.run(collect_history())
+        # processing data
+        asyncio.run(main())
+
+        # collect historical data
+        # asyncio.run(collect_history())
     except KeyboardInterrupt:
         print("\nApplication interrupted gracefully")
     except Exception as e:

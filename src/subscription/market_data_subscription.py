@@ -1,3 +1,5 @@
+from typing import Any, Coroutine
+
 from dotenv import load_dotenv
 from os import getenv
 import asyncio
@@ -197,53 +199,57 @@ class MarketDataSubscription:
         await self.stop()
 
 
-    async def download_historical_data(self, session,
-                                       symbols: list[str],  # Changed to list
-                                       interval: str,
-                                       start: datetime,
-                                       end: datetime = datetime.now()) -> dict[str, list[dict]]:
-        data = {symbol: [] for symbol in symbols}  # Track data per symbol
+    async def download_historical_data(
+        self,
+        session,
+        symbols: list[str],
+        interval: str,
+        start: datetime,
+        end: datetime = datetime.now(),
+    ) -> None:
+        data = {symbol: [] for symbol in symbols}
         end_ms = int(end.timestamp() * 1000)
         start_ms = int(start.timestamp() * 1000)
-        completed_symbols = set()  # Track which symbols are done
+        completed_symbols = set()
 
-        async with DXLinkStreamer(session) as streamer:
-            await streamer.subscribe_candle(symbols,
-                                            interval,
-                                            start_time=start,
-                                            extended_trading_hours=False)
-            async for candle in streamer.listen(Candle):
-                symbol = candle.event_symbol.split('{')[0]
+        try:
+            async with DXLinkStreamer(session) as streamer:
+                self.streamer = streamer
+                self.session = session
 
-                # Skip if this symbol is already complete
-                # if symbol in completed_symbols:
-                #     continue
+                await streamer.subscribe_candle(
+                    symbols,
+                    interval,
+                    start_time=start,
+                    extended_trading_hours=False
+                )
 
-                # If candle is before our range, mark symbol as complete
-                if candle.time < start_ms:
-                    completed_symbols.add(symbol)
-                    # Exit if all symbols are complete
-                    if len(completed_symbols) == len(symbols):
+                candle_iter = streamer.listen(Candle).__aiter__()
+
+                while True:
+                    try:
+                        candle = await asyncio.wait_for(anext(candle_iter), timeout=3.0)
+                    except asyncio.TimeoutError:
+                        print("No candles received in 3 seconds; breaking out.")
                         break
-                    continue
 
-                # Skip candles after our end time
-                # if candle.time > end_ms:
-                #     continue
+                    symbol = candle.event_symbol.split('{')[0]
 
-                # Store candles in range
-                if candle.close == 0:
-                    completed_symbols.add(symbol)
-                    if len(completed_symbols) == len(symbols):
-                        break
-                else:
-                    data[symbol].append(candle.model_dump())
+                    if candle.time < start_ms:
+                        completed_symbols.add(symbol)
+                        if len(completed_symbols) == len(symbols):
+                            break
+                        continue
 
-                # If we hit the exact start time, mark symbol as complete
-                # if candle.time == start_ms:
-                #     completed_symbols.add(symbol)
-                #     if len(completed_symbols) == len(symbols):
-                #         break
+                    if candle.close == 0:
+                        completed_symbols.add(symbol)
+                        if len(completed_symbols) == len(symbols):
+                            break
+                    else:
+                        data[symbol].append(candle.model_dump())
+
+        finally:
+            await self.cleanup()
 
         for symbol in symbols:
             self.data_store.store_metric_data_history(symbol, data[symbol])
