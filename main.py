@@ -1,5 +1,6 @@
 import asyncio
 import os
+import sys
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 
@@ -209,11 +210,12 @@ if __name__ == "__main__":
     send_pushover_notification("The TastyData container has started successfully!")
 
     try:
-        # processing data
-        asyncio.run(main())
-
-        # collect historical data
-        # asyncio.run(collect_history())
+        if len(sys.argv) > 1 and sys.argv[1].lower() == "history":
+            # collect historical data
+            asyncio.run(collect_history())
+        else:
+            # processing data
+            asyncio.run(main())
     except KeyboardInterrupt:
         print("\nApplication interrupted gracefully")
     except Exception as e:
