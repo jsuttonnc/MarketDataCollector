@@ -207,7 +207,7 @@ async def collect_history():
 
 if __name__ == "__main__":
     load_dotenv()
-    send_pushover_notification("The TastyData container has started successfully!")
+    send_pushover_notification("The MarketData container has started successfully!")
 
     try:
         if len(sys.argv) > 1 and sys.argv[1].lower() == "history":
