@@ -14,11 +14,10 @@ from src.messages.push_notifications import send_pushover_notification
 from src.session.session_manager import create_session
 from src.subscription.equity_metrics import EquityMetrics
 from src.subscription.market_data_subscription import MarketDataSubscription
-
+from src.subscription.watch_list_manager import WatchListManager
 
 def load_symbols(source_file):
     """Load symbols from the source_file file."""
-    symbols_file = os.path.join(os.path.dirname(__file__), source_file)
     try:
         with open(source_file, 'r') as f:
             symbols_data = yaml.safe_load(f)
@@ -129,6 +128,10 @@ async def main():
         cron_minute = _get_int_env("DAILY_TASK_MINUTE", 0)
         cron_second = _get_int_env("DAILY_TASK_SECOND", 0)
 
+        cron_hour = 17
+        cron_minute = 52
+        cron_second = 0
+
         # Schedule the task using cron syntax
         scheduler.add_job(
             daily_task,
@@ -186,7 +189,7 @@ async def collect_history():
 
     # Set your symbol, interval, and time range
     interval = "1d"
-    start = datetime.now() - timedelta(days=352)
+    start = datetime.now() - timedelta(days=2)
     end = datetime.now()
 
     market_sub = MarketDataSubscription(session, nightly_symbols, data_store)
@@ -205,14 +208,30 @@ async def collect_history():
             await asyncio.sleep(delay_between_batches)
 
 
+async def watch_lists():
+    try:
+        # create session
+        session = create_session()
+        # create the data store
+        data_store = MarketDataStore()
+    except Exception as e:
+        print(f"Error creating session: {e}")
+        return
+
+    watch_list_manager = WatchListManager(session, data_store)
+    await watch_list_manager.load_watch_list_data()
+
 if __name__ == "__main__":
     load_dotenv()
-    send_pushover_notification("The MarketData container has started successfully!")
+    # send_pushover_notification("The MarketData container has started successfully!")
 
     try:
         if len(sys.argv) > 1 and sys.argv[1].lower() == "history":
             # collect historical data
             asyncio.run(collect_history())
+        elif len(sys.argv) > 1 and sys.argv[1].lower() == "watchlists":
+            # get the public watch lists
+            asyncio.run(watch_lists())
         else:
             # processing data
             asyncio.run(main())

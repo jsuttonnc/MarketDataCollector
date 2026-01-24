@@ -184,7 +184,7 @@ class MarketDataSubscription:
                     'liquidity_rank': m_data[0].liquidity_rank,
                 })
 
-            print(candle_dict)
+            # print(candle_dict)
             self.data_store.store_candle_data(candle_dict)
         except Exception as e:
             print(f"Error processing candle data: {e}")
@@ -235,6 +235,11 @@ class MarketDataSubscription:
 
                     symbol = candle.event_symbol.split('{')[0]
 
+                    # print(candle.time, symbol, candle.close)
+                    # get metric data
+                    # m_data = get_market_metrics(self.session, [symbol])
+                    # print(m_data)
+
                     if candle.time < start_ms:
                         completed_symbols.add(symbol)
                         if len(completed_symbols) == len(symbols):
@@ -253,4 +258,4 @@ class MarketDataSubscription:
 
         for symbol in symbols:
             self.data_store.store_metric_data_history(symbol, data[symbol])
-            print(f"{symbol}: {len(data[symbol])} candles")
+            # print(f"{symbol}: {len(data[symbol])} candles")
