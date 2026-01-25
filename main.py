@@ -24,8 +24,8 @@ def load_symbols(source_file):
             return symbols_data
     except FileNotFoundError:
         raise FileNotFoundError(f"Symbols file not found: {source_file}")
-    except yaml.YAMLError as e:
-        raise ValueError(f"Invalid YAML in symbols file: {source_file}. Error: {e}")
+    except yaml.YAMLError as err:
+        raise ValueError(f"Invalid YAML in symbols file: {source_file}. Error: {err}")
 
 
 @asynccontextmanager
@@ -50,17 +50,17 @@ async def market_subscription_manager(session, symbols, data_store):
                     if asyncio.iscoroutinefunction(market_sub.stop):
                         await asyncio.wait_for(market_sub.stop(), timeout=5.0)
                     else:
-                        market_sub.stop()
+                        await market_sub.stop()
             except asyncio.TimeoutError:
                 print("Warning: Market subscription stop timed out")
-            except Exception as e:
-                print(f"Error stopping streamer: {e}")
+            except Exception as err:
+                print(f"Error stopping streamer: {err}")
 
         if data_store and hasattr(data_store, 'disconnect'):
             try:
                 data_store.disconnect()
-            except Exception as e:
-                print(f"Error disconnecting database: {e}")
+            except Exception as err:
+                print(f"Error disconnecting database: {err}")
 
 
 def _get_int_env(name: str, default: int) -> int:
@@ -83,8 +83,8 @@ async def main():
         streaming_symbols = load_symbols('streaming-symbols.yaml')
         # load nightly symbols
         nightly_symbols = load_symbols('nightly-symbols.yaml')
-    except Exception as e:
-        print(f"Error loading symbols: {e}")
+    except Exception as err:
+        print(f"Error loading symbols: {err}")
         return
 
     try:
@@ -92,8 +92,8 @@ async def main():
         session = create_session()
         # create the data store
         data_store = MarketDataStore()
-    except Exception as e:
-        print(f"Error creating session: {e}")
+    except Exception as err:
+        print(f"Error creating session: {err}")
         return
 
     # Create a closure that captures the variables you need
@@ -128,10 +128,6 @@ async def main():
         cron_minute = _get_int_env("DAILY_TASK_MINUTE", 0)
         cron_second = _get_int_env("DAILY_TASK_SECOND", 0)
 
-        cron_hour = 17
-        cron_minute = 52
-        cron_second = 0
-
         # Schedule the task using cron syntax
         scheduler.add_job(
             daily_task,
@@ -143,7 +139,7 @@ async def main():
 
         # create a subscription
         indices_list = streaming_symbols['indices']
-        async with market_subscription_manager(session, indices_list, data_store) as market_sub:
+        async with market_subscription_manager(session, indices_list, data_store):
             print("Streamer is running. Press Ctrl+C to stop.")
 
             # Start the scheduler
@@ -159,23 +155,23 @@ async def main():
 
     except KeyboardInterrupt:
         print("\nShutdown requested. Exiting Script...")
-    except Exception as e:
-        print(f"Error in main execution: {e}")
+    except Exception as err:
+        print(f"Error in main execution: {err}")
     finally:
         # Proper cleanup of scheduler
         if scheduler and scheduler.running:
             print("Shutting down scheduler...")
             try:
                 scheduler.shutdown(wait=False)  # Don't wait to prevent deadlock
-            except Exception as e:
-                print(f"Error shutting down scheduler: {e}")
+            except Exception as err:
+                print(f"Error shutting down scheduler: {err}")
 
 async def collect_history():
     try:
         # load nightly symbols
         nightly_symbols = load_symbols('nightly-symbols.yaml')
-    except Exception as e:
-        print(f"Error loading symbols: {e}")
+    except Exception as err:
+        print(f"Error loading symbols: {err}")
         return
 
     try:
@@ -183,8 +179,8 @@ async def collect_history():
         session = create_session()
         # create the data store
         data_store = MarketDataStore()
-    except Exception as e:
-        print(f"Error creating session: {e}")
+    except Exception as err:
+        print(f"Error creating session: {err}")
         return
 
     # Set your symbol, interval, and time range
@@ -214,8 +210,8 @@ async def watch_lists():
         session = create_session()
         # create the data store
         data_store = MarketDataStore()
-    except Exception as e:
-        print(f"Error creating session: {e}")
+    except Exception as err:
+        print(f"Error creating session: {err}")
         return
 
     watch_list_manager = WatchListManager(session, data_store)
