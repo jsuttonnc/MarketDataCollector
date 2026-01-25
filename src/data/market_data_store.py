@@ -121,9 +121,9 @@ class MarketDataStore:
             :param data:
         """
         insert_sql = """
-                     INSERT INTO equity_data (symbol, close_price, volume, created_at)
+                     INSERT INTO equity_data (symbol, close_price, volume, created_date)
                      VALUES %s
-                     ON CONFLICT (symbol, created_at) DO NOTHING
+                     ON CONFLICT (symbol, created_date) DO NOTHING
                      """
 
         params_list = []

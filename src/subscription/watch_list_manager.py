@@ -16,8 +16,8 @@ class WatchListManager:
         try:
             public_watchlist = PublicWatchlist.get(self.session)
 
-            val = self.extract_equity_symbols_from_watchlists(public_watchlist)
-            # val = self.extract_equity_symbols_detailed(public_watchlist)
+            # val = self.extract_equity_symbols_from_watchlists(public_watchlist)
+            val = self.extract_equity_symbols_detailed(public_watchlist)
             print(sorted(val))
         except Exception as e:
             print(f"Error loading watch lists: {e}")
